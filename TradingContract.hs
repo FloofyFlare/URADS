@@ -35,13 +35,11 @@ import           Codec.Serialise hiding (encode)
 import           Plutus.ChainIndex as Chain
 
 
-
-
 minADA :: Value
 minADA = Ada.lovelaceValueOf 2000000
 
 price :: Value 
-price = Ada.lovelaceValueOf 12000000
+price = Ada.lovelaceValueOf 25000000
 
 data ContractInfo = ContractInfo
     { policyID :: !CurrencySymbol
@@ -53,7 +51,6 @@ data ContractInfo = ContractInfo
 contractInfo = ContractInfo 
     { policyID = "8b0dbdd6504ff8f129400ab3b21f12a52ffb09f0b3cff594cb5bb868"
     , walletOwner = "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
-    , nameOfToken = "reward"
     }
 
 --purchase portion of the contract 
@@ -110,36 +107,22 @@ PlutusTx.makeLift ''AmountParams
 data LockParams = LockParams
     { lpDatum    :: !Integer
     , lpTokensPerOutput   :: !Integer
+    , nameOfToken   :: !TokenName
     } deriving (Generic, ToJSON, FromJSON, ToSchema)
 
 PlutusTx.makeLift ''LockParams
 
 --Start of endpoints
 type SignedSchema = 
-    Endpoint "mint" AmountParams
-     .\/ Endpoint "lock" LockParams
+    Endpoint "lock" LockParams
      .\/ Endpoint "purchase" ()
-
-mint :: AsContractError e => AmountParams -> Contract w s e ()
-mint ap = do
-    ppkh <- Contract.ownPaymentPubKeyHash
-    let pkh     = unPaymentPubKeyHash ppkh
-        val     = Value.singleton (curSymbol pkh) (nameOfToken contractInfo) (apAmount ap)
-        lookups = Constraints.mintingPolicy $ policy (pkh)
-        tx      = Constraints.mustMintValue val
-    ledgerTx <- submitTxConstraintsWith @Void lookups tx
-    void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
-    logInfo @String $ printf "forged %s" (show val)
 
 lock :: LockParams -> Contract w SignedSchema Text ()
 lock lp =  do
 -- make a recusive function that allows for the creation of a 1000 utxos of diffrent datums from a wallet (cheap if implemented correctly) 
         
-    let v   = Value.singleton (policyID contractInfo) (nameOfToken contractInfo) (lpTokensPerOutput lp) <> minADA
-        tx  =   foldl
-                (\acc i -> acc <> (Constraints.mustPayToTheScript (i) $ v))
-                (TxConstraints [] [] [])
-                [(lpDatum lp * 1000)..((lpDatum lp +1) * 1000 -1)]
+    let v   = Value.singleton (policyID contractInfo) (nameOfToken lp) (lpTokensPerOutput lp) <> minADA
+        tx  = Constraints.mustPayToTheScript (lpDatum lp) $ v
                 
     void (submitTxConstraints lootBox tx)
 
@@ -162,9 +145,8 @@ purchase _ =  do
 -- Sort through the Utxos so that it only collect the right one
 
 endpoints :: Contract () SignedSchema Text ()
-endpoints = awaitPromise (mint' `select` lock' `select` purchase') >> endpoints
+endpoints = awaitPromise (lock' `select` purchase') >> endpoints
   where
-    mint' = endpoint @"mint" mint
     lock' = endpoint @"lock" lock
     purchase' = endpoint @"purchase" purchase
 
