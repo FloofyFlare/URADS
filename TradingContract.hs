@@ -21,10 +21,8 @@ import           Data.Text              (Text)
 import           Data.Void              (Void)
 import           GHC.Generics           (Generic)
 import           Data.Map              as Map hiding (foldl)
-import           Plutus.Contract        
 import           Plutus.Contract        as Contract
 import           Ledger.Address         as Add
-import           Plutus.Trace.Emulator  as Emulator
 import qualified PlutusTx
 import           Ledger                 hiding (mint, singleton)
 import           Ledger.Constraints     as Constraints
@@ -36,19 +34,16 @@ import           Playground.Types       (KnownCurrency (..))
 import           Prelude                (IO, Show (..), String)
 import           Text.Printf            (printf)
 import           Wallet.Emulator.Wallet
-import           Wallet.Effects         as Effects
 import qualified PlutusTx.Builtins      as Builtins
 import           Plutus.V1.Ledger.Ada as Ada
 import           Ledger.Tx              (scriptTxOut, ChainIndexTxOut)
 import           Plutus.ChainIndex.Tx 
-import           Ledger.Blockchain 
 import           Playground.Contract
 import           PlutusTx.Prelude     hiding (Semigroup(..), unless)
 import           Prelude              (IO, Semigroup (..), String, Show(..))
 import qualified Prelude              as Haskell
 import           Cardano.Api hiding (Value, TxOut,Address)
 import           Cardano.Api.Shelley hiding (Value, TxOut, Address)
-import           Codec.Serialise hiding (encode)
 import           Plutus.ChainIndex as Chain
 
 
@@ -61,7 +56,6 @@ price = Ada.lovelaceValueOf 25000000
 data ContractInfo = ContractInfo
     { policyID :: !CurrencySymbol
     , walletOwner :: !PubKeyHash
-    , nameOfToken :: !TokenName
     } deriving (Generic, ToJSON, FromJSON)
 
 
