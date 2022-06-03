@@ -45,6 +45,7 @@ import qualified Prelude              as Haskell
 import           Cardano.Api hiding (Value, TxOut,Address)
 import           Cardano.Api.Shelley hiding (Value, TxOut, Address)
 import           Plutus.ChainIndex as Chain
+import           Data.ByteString.Lazy.Char8
 
 
 minADA :: Value
@@ -118,7 +119,7 @@ PlutusTx.makeLift ''AmountParams
 data LockParams = LockParams
     { lpDatum    :: !Integer
     , lpTokensPerOutput   :: !Integer
-    , nameOfToken   :: !TokenName
+    , nameOfToken   :: !ByteString
     } deriving (Generic, ToJSON, FromJSON, ToSchema)
 
 PlutusTx.makeLift ''LockParams
@@ -128,15 +129,28 @@ type SignedSchema =
     Endpoint "lock" LockParams
      .\/ Endpoint "purchase" ()
 
+fillInt :: String -> String 
+fillInt str | length str == 1     = "000" ++ str
+            | length str == 2     = "00" ++ str
+            | length str == 3     = "0" ++ str
+            | length str == 0     = str
+
+nameResult :: ByteString -> Integer -> BuiltinByteString 
+nameResult str int = toBuiltin $ pack $ (unpack str) ++ (fillInt $ show int) 
+
+
 lock :: LockParams -> Contract w SignedSchema Text ()
 lock lp =  do
 -- make a recusive function that allows for the creation of a 1000 utxos of diffrent datums from a wallet (cheap if implemented correctly) 
-        
-    let v   = Value.singleton (policyID contractInfo) (nameOfToken lp) (lpTokensPerOutput lp) <> minADA
-        tx  = Constraints.mustPayToTheScript (lpDatum lp) $ v
+    let v   = Value.singleton (policyID contractInfo) (nameOfToken contractInfo) (lpTokensPerOutput lp) <> minADA
+        tx  =   foldl
+                (\acc i -> acc <> (Constraints.mustPayToTheScript (i) $ v))
+                (TxConstraints [] [] [])
+                [(lpDatum lp * 1000)..((lpDatum lp +1) * 1000)]
                 
-    void (submitTxConstraints lootBox tx)
+    void (submitTxConstraints lootBox tx)    
 
+--This file works 
 purchase :: () -> Contract w SignedSchema Text ()
 purchase _ =  do
     utxos <- utxosAt valAddress
