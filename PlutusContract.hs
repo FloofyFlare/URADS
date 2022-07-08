@@ -10,10 +10,9 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
-
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 
-module PurchaseCode where
+module Week03.Vesting where
 
 import           Control.Monad          hiding (fmap)
 import           Data.Aeson             (ToJSON, FromJSON)
@@ -23,6 +22,7 @@ import           GHC.Generics           (Generic)
 import           Data.Map              as Map hiding (foldl)
 import           Plutus.Contract        as Contract
 import           Ledger.Address         as Add
+import           PlutusTx             (Data (..))
 import qualified PlutusTx
 import           Ledger                 hiding (mint, singleton)
 import           Ledger.Constraints     as Constraints
@@ -36,15 +36,15 @@ import           Text.Printf            (printf)
 import           Wallet.Emulator.Wallet
 import qualified PlutusTx.Builtins      as Builtins
 import           Plutus.V1.Ledger.Ada as Ada
+import           Plutus.V1.Ledger.Value as RaymondFlowerFix
 import           Ledger.Tx              (scriptTxOut, ChainIndexTxOut)
-import           Plutus.ChainIndex.Tx 
 import           Playground.Contract
 import           PlutusTx.Prelude     hiding (Semigroup(..), unless)
 import           Prelude              (IO, Semigroup (..), String, Show(..))
 import qualified Prelude              as Haskell
 import           Cardano.Api hiding (Value, TxOut,Address)
 import           Cardano.Api.Shelley hiding (Value, TxOut, Address)
-import           Plutus.ChainIndex as Chain
+import           Data.ByteString.Lazy.Char8 (ByteString, pack, unpack)
 
 
 minADA :: Value
@@ -74,7 +74,7 @@ instance Scripts.ValidatorTypes LootBoxData where
 --If never changed by the end of the project use the builtins script validator
 {-# INLINABLE mkValidator #-}
 mkValidator :: Integer -> () -> ScriptContext -> Bool
-mkValidator i x ctx = True
+mkValidator _ _ _ = True
 
 lootBox :: Scripts.TypedValidator LootBoxData
 lootBox = Scripts.mkTypedValidator @LootBoxData
@@ -109,17 +109,12 @@ policy pkh = mkMintingPolicyScript $
 curSymbol :: PubKeyHash -> CurrencySymbol
 curSymbol = scriptCurrencySymbol . policy
 
-data AmountParams = AmountParams
-    { apAmount    :: !Integer
-    } deriving (Generic, ToJSON, FromJSON, ToSchema)
-
-PlutusTx.makeLift ''AmountParams
 
 data LockParams = LockParams
     { lpDatum    :: !Integer
     , lpTokensPerOutput   :: !Integer
     , nameOfToken   :: !TokenName
-    } deriving (Generic, ToJSON, FromJSON, ToSchema)
+    } deriving (Generic, FromJSON, ToJSON, ToSchema)
 
 PlutusTx.makeLift ''LockParams
 
@@ -131,18 +126,21 @@ type SignedSchema =
 lock :: LockParams -> Contract w SignedSchema Text ()
 lock lp =  do
 -- make a recusive function that allows for the creation of a 1000 utxos of diffrent datums from a wallet (cheap if implemented correctly) 
-        
+-- Lets fold in as a BuiltinByteString the number of the TokenName
     let v   = Value.singleton (policyID contractInfo) (nameOfToken lp) (lpTokensPerOutput lp) <> minADA
-        tx  = Constraints.mustPayToTheScript (lpDatum lp) $ v
+        tx  =   Constraints.mustPayToTheScript (lpDatum lp) $ v
+                --foldl
+                --(\acc i -> acc <> (Constraints.mustPayToTheScript (i) $ v))
+                --(TxConstraints [] [] [])
+                --[(lpDatum lp * 1000)..((lpDatum lp +1) * 1000)]
                 
-    void (submitTxConstraints lootBox tx)
+    void (submitTxConstraints lootBox tx)    
 
+--This file works 
 purchase :: () -> Contract w SignedSchema Text ()
 purchase _ =  do
     utxos <- utxosAt valAddress
-    unless (Haskell.null utxos) $ do
     let outputs = Map.toList utxos
-        r      = Redeemer $ PlutusTx.toBuiltinData ()
         (oref, o) = head outputs
         ppkh     = walletOwner contractInfo
         lookups = Constraints.unspentOutputs utxos <>
@@ -164,3 +162,4 @@ endpoints = awaitPromise (lock' `select` purchase') >> endpoints
 mkSchemaDefinitions ''SignedSchema
 
 mkKnownCurrencies []
+
