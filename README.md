@@ -8,4 +8,3 @@ Goal: To be an customizable Cardano Contract sutable NFT sale, in game loot boxe
 To Do - 
 + Run on Cardano Testnet 
 + Debug for live implementation
-+ remove rewards component
